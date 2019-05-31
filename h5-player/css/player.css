@@ -1,0 +1,128 @@
+:root { 
+    --backgroundColor   : #f8f8f9; 
+    --gap               : 12px;         
+    --primaryColor      : #2d8cf0;
+    --optionWidth       : 28px;
+    --optionHeight      : 28px;
+ }
+body, html, #player-box {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    background-color: var(--backgroundColor)
+}
+.courseware-title {
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 12px;
+}
+.menu-title {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-bottom: 2px solid var(--backgroundColor);
+    height: 50px;
+}
+.menu-title span {
+    margin-left: 50px;
+    cursor: pointer;
+}
+.menu-title span:hover {
+    font-weight: bold;
+    border-bottom: 5px solid rgb(169, 234, 206);
+}
+.actived {
+    font-weight: bold;
+    border-bottom: 5px solid rgb(169, 234, 206);
+}
+.examine {
+    padding: 8px;
+}
+.button-box-preview{
+    text-align: center;
+}
+.options-content-preview{
+    padding-top: 10px;
+}
+.question-analysis-preview{
+    padding-left: 10px;
+}
+.question-knowledge-point-preview{
+    padding-left: 10px;
+}
+.question-analysis-content-preview {
+    margin-left: 5px;
+    margin-bottom: 5px;
+}
+.question-option {
+    display: flex;
+    margin-bottom: var(--gap);
+}
+.question-option:hover.mark{
+    color: white;
+    background: var(--primaryColor);
+}
+.mark {
+    min-width : var(--optionWidth);
+    min-height: var(--optionHeight);
+    max-width : var(--optionWidth);
+    max-height: var(--optionHeight);
+    border-radius: 50%;
+    margin-right: var(--gap);
+    display        : flex;
+    flex-direction : column;
+    justify-content: center;
+    align-items    : center;
+    border: 1px solid #e8eaec;
+    cursor: pointer;
+}
+.mark.correct{
+    color: white;
+    background: var(--primaryColor);
+}
+.mark:hover {
+    color: white;
+    background: var(--primaryColor);
+}
+.prism-controlbar{
+    bottom: 10px!important;
+}
+.point {
+    position: absolute;
+    top: -3px;
+    width: 10px;
+    height: 10px;
+    border: 1px solid blue;
+    border-radius: 50%;
+    background: red;
+    z-index: 100000;
+    cursor:pointer;
+}
+.points span{
+    display: inline-block;
+    padding: 5px 10px;
+}
+.importantb{
+    position: absolute;
+    top: 0px;
+    height: 4px;
+    left: 400px;
+    background: red;
+    width: 50px;
+}
+.point:hover {
+    border: 1px solid white;
+    background: orange;
+}
+.question-stem-preview {
+    margin-bottom: var(--gap);
+}
+.title-desc-preview {
+    font-weight: bold;
+}
+.positiveSolution {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+[v-cloak] {display: none;}

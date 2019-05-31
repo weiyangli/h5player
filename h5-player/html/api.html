@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript" src="../js/H5PlayerDao.js"></script>
+    <script type="text/javascript" src="../lib/jquery.min.js"></script>
+    <script type="text/javascript" src="../lib/jquery.rest.js"></script>
+    <script type="text/javascript" src="../js/urls.js"></script>
+</head>
+<body>
+    <div>
+        <button onclick="getData()">查询数据</button>
+        <div id="data"></div>
+    </div>
+<script>
+    function getData() {
+        var param = {
+            coursewareCode : '1369_ept' // 课件code
+        };
+        findCatalogByCoursewareCode(param, function (catalogs){
+            console.log(catalogs);
+            $("#data").html(catalogs);
+        });
+    }
+</script>
+</body>
+</html>

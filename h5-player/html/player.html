@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="https://g.alicdn.com/de/prismplayer/2.7.4/skins/default/aliplayer-min.css" />
+    <link rel="stylesheet" type="text/css" href="http://unpkg.com/iview/dist/styles/iview.css">
+    <link rel="stylesheet" type="text/css" href="../css/player.css">
+    <script charset="utf-8" type="text/javascript" src="https://g.alicdn.com/de/prismplayer/2.7.4/aliplayer-min.js"></script>
+    <script type="text/javascript" src="../js/H5PlayerDao.js"></script>
+    <script type="text/javascript" src="../lib/jquery.min.js"></script>
+    <script type="text/javascript" src="../lib/jquery.rest.js"></script>
+    <script type="text/javascript" src="../js/utils.js"></script>
+    <script type="text/javascript" src="../js/urls.js"></script>
+    <script type="text/javascript" src="../js/constants.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.min.js"></script>
+    <script type="text/javascript" src="http://unpkg.com/iview/dist/iview.min.js"></script></head>
+<body>
+    <div id="player-box">
+        <!-- 题目弹窗-->
+        <Modal ref="modal" v-cloak v-model="questionVideoModal" title="测评题" :closable="false" :mask-closable="false" footer-hide class="preview-modal" @on-visible-change="colseModal">
+            <!-- 题型 -->
+            <div class="question-stem-preview">
+                <span class="question-stem-content-preview">{{ baseTypeLabel }}</span>
+            </div>
+            <!-- 题干 -->
+            <div class="question-stem-preview">
+                <span v-if="question.snLabel" class="sn-label-preview">{{ question.snLabel }}</span>
+                <span class="question-stem-content-preview" v-html="question.questionStem"></span>
+            </div>
+            <!-- 选项 1: 单选题和多选题 -->
+            <div class="question-options">
+                <div v-for="(option, index) in question.optionList" :key="index" :class="{ correct: option.checked }" class="question-option">
+                    <div :class="{ correct: option.checked }" class="mark" @click="chooiceAnswer(question, index)">{{ option.quesValue }}</div>
+                    <div v-html="option.quesOption" class="option-list"></div>
+                </div>
+            </div>
+            <!-- 解析 -->
+            <div class="question-analysis-preview-box" v-show="showAnalysis">
+                <div class="question-analysis-preview">
+                    <div class="positiveSolution"></div>
+                    <span class="title-desc-preview">【解析】</span>
+                    <div class="question-analysis-content-preview" v-html="question.analysis"></div>
+                </div>
+                <!-- 考核点 -->
+                <div class="question-knowledge-point-preview">
+                    <span class="title-desc-preview">【考核点】</span>
+                    <div class="question-analysis-content-preview" v-html="question.examinePoint"></div>
+                </div>
+            </div>
+            <div class="button-box-preview">
+                <i-button v-if="buttonType == 1" type="primary" @click="submitAnswer">提交</i-button>
+                <i-button v-else type="primary" @click="videoCancel">关闭</i-button>
+            </div>
+        </Modal>
+        <div  class="prism-player" id="J_prismPlayer"></div>
+        <Card class="courseware-title" v-cloak dis-hover>{{ courseware.name }}</Card>
+        <Card class="chapter-content" v-cloak dis-hover>
+            <div class="menu-title" v-cloak>
+                    <span :class="{actived: type == 1}" @click="type = 1">课件</span>
+                    <span :class="{actived: type == 2}" @click="type = 2">考核</span>
+            </div>
+            <Tree v-if="type == 1" :data="chapters" :render="renderContent" v-cloak></Tree>
+            <div v-else class="examine" v-cloak>考核内容</div>
+        </Card>
+        <span></span>
+    </div>
+<script>
+var app = new Vue({
+    el: '#player-box',
+    data: {
+        nodeData: {},
+        coursewareCode: '1735_ept', // 课件 code
+        courseware: null,           // 课件信息
+        oldChapters: [],            // 没有处理过得课件信息
+        chapters: [],               // 处理后的章节树结构
+        type: 1,                    // 切换课件和考核 tab
+        medias: [] ,                // 当前课件的所有视频
+        timers: null,               // 弹题定时任务
+        questionsOpen: [],          // 当前章节的弹题
+        mediaTime: [],              // 答题点
+        questionVideoModal: false,  // 题目的弹窗状态
+        question: {},               // 当前弹出的题
+        buttonType: 1,
+        showAnalysis: false,        // 查看题目解析
+        rightAnswers: [],           // 正确答案
+        player: null,               // 播放器实例
+    },
+    created() {
+        // 注入 iview 通知
+        Utils.Notice = this.$Notice;
+        // 根据课件 code 查询所有章节
+        this.findChaptersByCoursewareCode();
+        // 根据课件 code 查询课件信息
+        this.findCoursewareByCode();
+        // 过滤出所有的视频
+        this.filterMedias(this.chapters);
+    },
+    computed: {
+        // 题型
+        baseTypeLabel() {
+            for (let type of QuesstionType) {
+                if (this.question.questionType == type.value) {
+                    return type.label;
+                }
+            }
+            return '';
+        },
+    },
+    mounted: function() {
+        // 播放用户选择的视频
+        this.changeMediaUrl(this.medias[0]);
+    },
+    methods:{
+        // 根据课件 code 查询所有章节
+        findChaptersByCoursewareCode() {
+            var self = this;
+            var param = {
+                coursewareCode : this.coursewareCode
+            };
+            findCatalogByCoursewareCode(param, function (chapters){
+                if (chapters.length > 0) {
+                    // 深拷贝原来的章节信息
+                    self.oldChapters = JSON.parse(JSON.stringify(chapters));
+                    self.rebuildTree(chapters);
+                }
+            });
+        },
+        // 构建树结构
+        rebuildTree(chapters) {
+            let newTree = [];
+            // 找到每个节点的子节点
+            for (let tree of chapters) {
+                tree.children = [];
+                tree.expand = true;
+                for (let child of chapters) {
+                    if (child.pId == tree.id) {
+                        tree.children.push(child);
+                    }
+                }
+            }
+            // 过滤掉除第一节点外的数据
+            newTree = chapters.filter(x => x.pId == 0);
+            this.chapters.push(...newTree);
+        },
+        // 根据课件 code 查询课件信息
+        findCoursewareByCode() {
+            var self = this;
+            findCoursewareByCode(this.coursewareCode, function (courseware) {
+                if (courseware) {
+                    self.courseware = courseware;
+                }
+            });
+        },
+        // 初始化树 dom
+        renderContent(h, { root, node, data }) {
+            let self = this;
+            var icon = data.isMedia == 1 ? 'ios-film': 'ios-paper-outline';
+            var color = data.id == this.nodeData.id ? '#5c77fb' : '';
+            return h('span', {
+                    style: {
+                        display: 'inline-block',
+                        width: '100%',
+                        fontSize: '15px',
+                        color: color,
+                        cursor: 'pointer'
+                    }
+                }, [
+                    h('span', [
+                        h('Icon', {
+                            props: {
+                                type: icon,
+                                size: 20,
+                            },
+                            style: {
+                                marginRight: '8px'
+                            }
+                        }),
+                        h('span', {
+                            on: {
+                                click:()=>{
+                                    self.changeMediaUrl(data)
+                                }
+                            }
+                        },data.title)
+                    ]),
+                ]
+            );
+        },
+        // 过滤出所有视频
+        filterMedias(chapters) {
+            var self = this;
+            for (let chapter of chapters) {
+                if (chapter.isMedia == 1) {
+                    self.medias.push(chapter);
+                }
+                if (chapter.children.length > 0) {
+                    self.filterMedias(chapter.children);
+                }
+            }
+        },
+        // 改变章节重置对象
+        changeCode(data) {
+            this.nodeData = data;
+            // 准备查询讲义、题目、知识点
+            this.nodeData.lectures = [];
+            this.nodeData.catalogKnowledgePoints = [];
+            this.nodeData.questions = [];
+            // 是媒体查询媒体信息
+            if (this.nodeData.isMedia == 1) {
+                // 查询弹题、讲义、知识点
+                this.findLecturesMediaKnowledgePointsQuestions();
+            }
+        },
+        // 查询章节讲义知识点
+        findLecturesMediaKnowledgePointsQuestions() {
+            var self = this;
+            this.mediaTime = [];
+            this.questionsOpen= [];
+            findLecturesMediaKnowledgePointsQuestions(self.nodeData.id, function (catalog) {
+                if (catalog) {
+                    // 获取媒体
+                    if (catalog.media) {
+                        self.nodeData.media = catalog.media;
+                    }
+                    // 获取弹题
+                    if (catalog.questions.length > 0) {
+                        self.nodeData.questions.push(...catalog.questions);
+                        self.mediaTime = self.nodeData.questions.map(x => x.mediaTime);
+                        for (let question of self.nodeData.questions) {
+                            self.$set(question, 'flag', true);
+                            self.questionsOpen.push(question);
+                        }
+                    }
+                }
+            });
+        },
+        // 清除定时任务
+        clearTimeOuts() {
+            // 清楚上个视频的弹题、讲义、知识点的定时任务
+            clearTimeout(this.timers);
+            this.timers = null;
+        },
+        // 切换视频
+        changeMediaUrl(data) {
+            // 和上一次切换的章节不一样时切换
+            if (data.id == this.nodeData.id) { return; }
+            // 清除所有定时任务
+            this.clearTimeOuts();
+            // 根据当前章节查询讲义、弹题、知识点
+            this.changeCode(data);
+            // 判断当前节点是否是视频
+            if (this.nodeData.isMedia != 1) {
+                // 创建空的播放器
+                this.endedHandle(2, '', '', '');
+                return;
+            }
+            // 删除所有创建答题点
+            $('.point').remove();
+            // 删除所有创建的知识点
+            $('.importantb').remove();
+            // 根据服务器编码，获取对应服务器类型
+            findServerType(this.nodeData.media.serverCode, (serverTypeInfo) => {
+                if (serverTypeInfo) {
+                    this.nodeData.media.serverType = serverTypeInfo.serverType;
+                    this.nodeData.media.serverCluster = serverTypeInfo.serverCluster;
+                }
+            });
+            // 判断视频播放类型(普通 http 或者 ftp 使用 loadByUrl 直接播放，阿里云视频需要删除原来播放器重新创建)
+            if (this.nodeData.media.serverType.indexOf('aliyunCode') == -1) {
+                if (this.nodeData.media.mediaSource.indexOf('http') !=-1) {
+                    // HTTP播放(用户输入完整路径http:***)
+                    this.endedHandle(2, this.nodeData.media.mediaSource, '', '');
+                } else {
+                    // HTTP播放（无域名的路径）
+                    this.endedHandle(2, this.nodeData.media.serverCluster + '/' + this.nodeData.media.mediaSource + '_sd.mp4', '', '');
+                }
+                player.play();
+            } else {
+                // 阿里云ID播放
+                this.findPlayAuth(this.nodeData.media);
+            }
+        },
+        // 查询视频认证信息
+        findPlayAuth(media) {
+            findPlayAuth(media.mediaSource, media.serverCode, (auth) => {
+                if (auth) {
+                    this.endedHandle(1, '', media.mediaSource, auth.playAuth);
+                }
+            });
+        },
+        // 切换视频重新创建播放器
+        endedHandle(type, source, vid, newPlayAuth) {
+            if (this.player) {
+                this.player.dispose();
+            }
+            // id为html里指定的播放器的容器id
+            $('#J_prismPlayer').empty();
+            var flag = true;
+            if (type != 1) {
+                flag = false;
+            }
+            // 重新创建
+            this.player = new Aliplayer({
+                showBarTime:'5000000000',
+                id: 'J_prismPlayer',
+                width: '100%',
+                enableSystemMenu: true,
+                autoplay: flag,
+                preload: true,
+                useFlashPrism: false,
+                playsinline:true,
+                vid: vid,
+                playauth: newPlayAuth,
+                source: source,
+                format: 'm3u8',
+                skinLayout:[
+                {
+                    name: 'controlBar', align: 'blabs', x: 0, y: 0,
+                    children: [
+                        {
+                            name: 'progress', align: 'blabs', x: 0, y: 44
+                        },
+                        {
+                            name: 'playButton', align: 'tl', x: 15, y: 12
+                        },
+                        {
+                            name: 'timeDisplay', align: 'tl', x: 10, y: 7
+                        },
+                        {
+                            name: 'fullScreenButton', align: 'tr', x: 10, y: 12
+                        },
+                        {
+                            name: 'volume', align: 'tr', x: 5, y: 10
+                        },
+                    ]
+                }
+            ]
+            }, function(player) {
+            });
+            var self = this;
+            // 拖拽进度条前回传听课记录
+            this.player.on('startSeek', function(e) {
+                // 将当前视频的所有题的弹题状态变为true
+                self.questionsOpen.forEach(q => q.flag = true);
+            });
+            // 创建弹题点
+            function createQuestionPointAliyun() {
+                // 获取视频时长
+                var duration = $('video').get(0).duration;
+                for (var m=0; m<self.mediaTime.length; m++) {
+                    // 创建答题点
+                    var left = self.mediaTime[m] / duration*100;
+                    $('.prism-controlbar').append(`<div class="point" style="left: ${left}%" data-time="${left}"></div>`);
+                }
+            }
+            function getTimes() {
+                self.rightAnswers = [];
+                $('.handout .handout-list li').removeClass('active');
+                $('.knowledge-points .knowledge-points-list li').removeClass('actives');
+                var currentTime = parseInt(self.player.getCurrentTime());
+                self.timers = setTimeout(getTimes, 1000);
+                for (var b=0; b<self.questionsOpen.length; b++) {
+                    var positiveSolution='';
+                    if (self.questionsOpen[b].flag && self.questionsOpen[b].mediaTime == currentTime) {
+                        // 将题目的选项选中状态去掉
+                        for (var c= 0; c<self.questionsOpen[b].optionList.length; c++) {
+                            if (self.questionsOpen[b].optionList[c].correct==true) {
+                                positiveSolution+=self.questionsOpen[b].optionList[c].quesValue+' ';
+                                self.rightAnswers.push(self.questionsOpen[b].optionList[c].quesValue);
+                            }
+                        }
+                        $('.positiveSolution').html('【答案】'+positiveSolution);
+                        for (let options of self.questionsOpen[b].optionList) {
+                            self.$set(options, 'checked', false);
+                        }
+                        self.question = self.questionsOpen[b];
+                        self.questionVideoModal = true;
+                        self.questionsOpen[b].flag = false;
+                        self.player.pause();
+                    }
+                }
+            }
+            // 播放启动定时任务
+            let methods = self;
+            this.player.on('play', function (e) {
+                // 弹题
+                getTimes();
+            });
+            // 视频加载完成后开始回传记录
+            this.player.on('playing', function(e) {
+                // 加载弹题点
+                createQuestionPointAliyun();
+            });
+            // 当前视频播放结束时调用
+            this.player.on('ended', function (e) {
+                // 启动连播,自动切换下一个视频
+                if (self.episodicStatus == true) {
+                    self.chainBroadcast();
+                }
+            });
+            // 播放记录
+            /*************************/
+            var video = document.getElementsByTagName('video');
+            /*
+             * 1.点击开始播放
+             * 2.获取视频时长
+             * 3.创建答题节点
+             * 4.创建知识点
+            */
+            function myFunction() {
+                var index =0;
+            }
+            // 点击弹题点显示题目弹窗
+            $(document).on('click', '.point', (event) => {
+                // 将题目的弹题状态置位true
+                self.questionsOpen.forEach(q => q.flag = true);
+                var duration = $('video').get(0).duration;
+                var thisTime = $(event.target).attr('data-time')/100*duration;
+                // 调整进度
+                this.player.seek(Math.round(thisTime));
+                self.questionVideoModal = true;
+                this.player.pause();
+            });
+        },
+        colseModal(value) {
+            if (!value) {
+                this.player.play();
+                this.buttonType = 1;
+                this.showAnalysis = false;
+            }
+        },
+        // 弹题答案提交
+        submitAnswer() {
+            // 过滤学生选择的答案
+            let checkList = this.question.optionList.filter(x => x.checked == true);
+            if (checkList.length > 0) {
+                this.buttonType = 2;
+                this.showAnalysis = true;
+            } else {
+                this.$Message.warning('请作答!');
+            }
+        },
+        // 标记选项为正确的或者错误的
+        chooiceAnswer(question, optionIndex) {
+            if (this.readOnly) { return; }
+            Utils.chooiceAnswer(question, optionIndex);
+        },
+        // 视频弹窗点击取消
+        videoCancel() {
+            this.questionVideoModal = false;
+            this.$refs.modal.close();
+        },
+    }
+})
+</script>
+</body>
+</html>
